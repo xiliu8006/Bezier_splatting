@@ -1,0 +1,8 @@
+checkpoints/*
+checkpoints_quant/*
+output/*
+__pycache__/*
+gsplat/build/*
+gsplat/gsplat.egg-info/*
+*.log
+slurm-*

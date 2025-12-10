@@ -1,0 +1,16 @@
+name: base
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - conda==24.11.3
+  - setuptools
+  - pip
+  - wheel
+  - conda-content-trust
+  - conda-libmamba-solver
+  - menuinst
+  - conda-forge::zsh
+  - ncurses
+  - aria2
+prefix: /home/xi9/miniconda3
