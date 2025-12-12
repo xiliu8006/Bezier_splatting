@@ -1,70 +1,41 @@
-# GaussianImage: 1000 FPS Image Representation and Compression by 2D Gaussian Splatting
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) 
-[![arXiv](https://img.shields.io/badge/GaussianImage-2403.08551-b31b1b)](https://arxiv.org/abs/2403.08551)
-[![GitHub Repo stars](https://img.shields.io/github/stars/Xinjie-Q/GaussianImage.svg?style=social&label=Star&maxAge=60)](https://github.com/Xinjie-Q/GaussianImage)
+# Bézier Splatting for Fast and Differentiable Vector Graphics Rendering 
+[[paper](https://arxiv.org/pdf/2503.16424)] [[project page](https://xiliu8006.github.io/Bezier_splatting_project/)]
 
-[[paper](https://arxiv.org/abs/2403.08551)][[project page](https://xingtongge.github.io/GaussianImage-page/)][[code](https://github.com/Xinjie-Q/GaussianImage)]
-
-[Xinjie Zhang*](https://xinjie-q.github.io/), [Xingtong Ge*](https://xingtongge.github.io/), [Tongda Xu](https://tongdaxu.github.io/), [Dailan He](https://scholar.google.com/citations?user=f5MTTy4AAAAJ&hl=en), [Yan Wang](https://yanwang202199.github.io/), [Hongwei Qin](http://qinhongwei.com/academic/), [Guo Lu](https://guolusjtu.github.io/guoluhomepage/), [Jing Geng📧](https://cs.bit.edu.cn/szdw/jsml/fjs/gj/index.htm), [Jun Zhang📧](https://eejzhang.people.ust.hk/)
-
-(* denotes equal contribution, 📧 denotes corresponding author.)
-
-This is the official implementation of our paper [GaussianImage](https://arxiv.org/abs/2403.08551), a groundbreaking paradigm of image representation and compression by 2D Gaussian Splatting. With compact 2D Gaussian representation and a novel rasterization method, our approach achieves high representation performance with short training duration, minimal GPU memory overhead and ultra-fast rendering speed. Furthermore, we integrate existing vector quantization technique to build an low-complexity neural image codec. Remarkably, the decoding speed of our codec reaches around 2000 FPS, outpacing traditional codecs like JPEG, while also providing enhanced compression performance at lower bitrates. This establishes a significant advancement in the field of neural image codecs. More qualitative results can be found in our paper.
+This is the official implementation of our paper **Bézier Splatting**, an efficient and differentiable vector-graphics representation designed for high-quality image reconstruction and editing. Our method models images using a compact set of Bézier curves, combined with a novel Gaussian-based rasterization that enables fast, stable, and fully differentiable rendering. Thanks to this lightweight vector representation and our adaptive curve optimization strategy, Bézier Splatting achieves high visual fidelity with significantly reduced computation time and memory usage compared to existing differentiable vector graphics methods. Moreover, the explicit curve-based representation makes the output SVGs clean, structured, and truly editable, enabling downstream applications such as scalable dataset generation and fine-grained image manipulation. More qualitative results and details can be found in our paper.
 
 <div align="center">
-  <img src="./img/kodak_representation.png" alt="kodak_fitting" width="320" />
-  <img src="./img/div2k_representation.png" alt="div2k_fitting" width="320" />
-</div>
-
-<div align="center">
-  <img src="./img/kodak_codec.png" alt="kodak_codec" width="320" />
-  <img src="./img/div2k_codec.png" alt="div2k_codec" width="320" />
-</div>
-
-<div align=center>
-<img src="./img/visual.png" alt="visual" width="640" />
+  <img src="./img/teaser.png" alt="kodak_fitting" width="320" />
 </div>
 
 ## News
-
-* **2024/7/8**: 🔥 We release our Python and CUDA code for GaussianImage presented in our paper. Have a try! Compared to the first version, we further improved the decoding speed of the GaussianImage codec to around 2000 FPS by removing the entropy coding operation, while only increasing the bpp overhead very slightly.
-
-* **2024/7/1**: 🌟 Our paper has been accepted by ECCV 2024! 🎉 Cheers!
+* **2025/9/18**: 🌟 Our paper has been accepted by NeurIPS 2025!
 
 ## Overview
 
-![overview](./img/overview.png)
+![overview](./img/framework.png)
 
-Implicit neural representations (INRs) recently achieved great success in image representation and compression, offering high visual quality and fast rendering speeds with 10-1000 FPS, assuming sufficient GPU resources are available. However, this requirement often hinders their use on low-end devices with limited memory. In response, we propose a groundbreaking paradigm of image representation and compression by 2D Gaussian Splatting, named GaussianImage. We first introduce 2D Gaussian to represent the image, where each Gaussian has 8 parameters including position, covariance and color. Subsequently, we unveil a novel rendering algorithm based on accumulated summation. Remarkably, our method with a minimum of $3\times$ lower GPU memory usage and $5\times$  faster fitting time not only rivals INRs (e.g., WIRE, I-NGP) in representation performance, but also delivers a faster rendering speed of 1500-2000 FPS regardless of parameter size. Furthermore, we integrate existing vector quantization technique to build an image codec. Experimental results demonstrate that our codec attains rate-distortion performance comparable to compression-based INRs such as COIN and COIN++, while facilitating decoding speeds of approximately 2000 FPS. Additionally, preliminary proof of concept shows that our codec surpasses COIN and COIN++ in performance when using partial bits-back coding. 
+Differentiable vector graphics (VGs) are widely used in image vectorization and vector synthesis, while existing representations are costly to optimize and struggle to achieve high-quality rendering results for high-resolution images. This work introduces a new differentiable VG representation, dubbed **Bézier Splatting**, that enables fast yet high-fidelity VG rasterization. Bézier Splatting samples 2D Gaussians along Bézier curves, which naturally provide positional gradients at object boundaries. Thanks to the efficient splatting-based differentiable rasterizer, Bézier Splatting achieves **30× and 150× faster forward and backward** rasterization for open curves compared to DiffVG. Additionally, we introduce an adaptive pruning and densification strategy that dynamically adjusts the spatial distribution of curves to escape local minima, further improving VG quality. Our representation also supports conversion to standard XML-based SVG format, enhancing interoperability with existing VG tools and pipelines. Experimental results show that Bézier Splatting significantly outperforms existing methods with better visual fidelity and substantial optimization speedup.  
+The project page is <https://xiliu8006.github.io/Bezier_splatting_project/>.
 
 ## Quick Started
 
 ### Cloning the Repository
-
-The repository contains submodules, thus please check it out with 
-```shell
-# SSH
-git clone git@github.com:Xinjie-Q/GaussianImage.git --recursive
-```
-or
 ```shell
 # HTTPS
-git clone https://github.com/Xinjie-Q/GaussianImage.git --recursive
-```
-After cloning the repository, you can follow these steps to train GaussianImage models under different tasks. 
+git clone https://github.com/xiliu8006/Bezier_splatting.git
 
-### Requirements
+cd Bezier_splatting
 
-```bash
+#After cloning the repository, please also download the 2D Gaussian rasterization from:
+
+git clone https://github.com/XingtongGe/gsplat/tree/bcca3ecae966a052e3bf8dd1ff9910cf7b8f851d
+
 cd gsplat
 pip install .[dev]
-cd ../
-pip install -r requirements.txt
 ```
+## Dataset Structure
 
-If you encounter errors while installing the packages listed in requirements.txt, you can try installing each Python package individually using the pip command.
-
-Before training, you need to download the [kodak](https://r0k.us/graphics/kodak/) and [DIV2K-validation](https://data.vision.ee.ethz.ch/cvl/DIV2K/) datasets. The dataset folder is organized as follows.
+Our dataset download from [kodak](https://r0k.us/graphics/kodak/) and [DIV2K](https://data.vision.ee.ethz.ch/cvl/DIV2K/) datasets. The dataset folder is organized as follows.
 
 ```bash
 ├── dataset
@@ -72,52 +43,48 @@ Before training, you need to download the [kodak](https://r0k.us/graphics/kodak/
 │     ├── kodim01.png
 │     ├── kodim02.png 
 │     ├── ...
-│   | DIV2K_valid_LR_bicubic
-│     ├── X2
-│        ├── 0801x2.png
-│        ├── 0802x2.png
-│        ├── ...
+│   | DIV2K_HR
+│     ├── 0801x2.png
+│     ├── 0802x2.png
+│     ├── ...
 ```
+## TO DO
+- Release configuration the open-curve image vectorization code.
+- Release configuration for layer-wise training (a runnable version exists, but further modifications are required).
 
-#### Representation
+## Train and Evaluation scripts
+
+To vectorize all images under one folder:
 
 ```bash
-sh ./scripts/gaussianimage_cholesky/kodak.sh /path/to/your/dataset
-sh ./scripts/gaussianimage_rs/kodak.sh /path/to/your/dataset
-sh ./scripts/3dgs/kodak.sh /path/to/your/dataset
-
-sh ./scripts/gaussianimage_cholesky/div2k.sh /path/to/your/dataset
-sh ./scripts/gaussianimage_rs/div2k.sh /path/to/your/dataset
-sh ./scripts/3dgs/div2k.sh /path/to/your/dataset
+bash train.sh
 ```
 
-#### Compression
-
-After overfitting the image, we load the checkpoints from image representation and apply quantization-aware training technique to obtain the image compression results of GaussianImage models.
-
+To run on multiple GPUs or multiple nodes:
 ```bash
-sh ./scripts/gaussianimage_cholesky/kodak_comp.sh /path/to/your/dataset
-sh ./scripts/gaussianimage_rs/kodak_comp.sh /path/to/your/dataset
-
-sh ./scripts/gaussianimage_cholesky/div2k_comp.sh /path/to/your/dataset
-sh ./scripts/gaussianimage_rs/div2k_comp.sh /path/to/your/dataset
+bash train_multi_nodes.sh
 ```
 
+To evaluate performance, run:
+```bash
+bash get_result.sh
+python full_eval.py
+```
 ## Acknowledgments
 
-Our code was developed based on [gsplat](https://github.com/nerfstudio-project/gsplat). This is a concise and easily extensible Gaussian Splatting library.
-
-We thank [vector-quantize-pytorch](https://github.com/lucidrains/vector-quantize-pytorch) for providing the framework to implement residual vector quantization.
+We thank [GaussianImage](https://github.com/Xinjie-Q/GaussianImage) for providing the 2D Gaussian rasterization; our code builds upon this excellent foundation.
 
 ## Citation
 
-If you find our GaussianImage paradigm useful or relevant to your research, please kindly cite our paper:
-
+If you find our paper Bézier Splatting useful, please cite:
 ```
-@inproceedings{zhang2024gaussianimage,
-  title={GaussianImage: 1000 FPS Image Representation and Compression by 2D Gaussian Splatting},
-  author={Zhang, Xinjie and Ge, Xingtong and Xu, Tongda and He, Dailan and Wang, Yan and Qin, Hongwei and Lu, Guo and Geng, Jing and Zhang, Jun},
-  booktitle={European Conference on Computer Vision},
-  year={2024}
+@inproceedings{
+liu2025bzier,
+title={B\'ezier Splatting for Fast and Differentiable Vector Graphics Rendering},
+author={Xi Liu and Chaoyi Zhou and Nanxuan Zhao and Siyu Huang},
+booktitle={The Thirty-ninth Annual Conference on Neural Information Processing Systems},
+year={2025},
+url={https://openreview.net/forum?id=bTclOYRfYJ}
 }
 ```
+

@@ -46,7 +46,7 @@ def bezier_splatting_to_svg(control_points, features_dc, svg_path, canvas_width,
             p3 = pts[3 * i + 3] if (3 * i + 3) < n_pts else pts[0]  # 回到起点
             d += f"C {p1[0]} {p1[1]}, {p2[0]} {p2[1]}, {p3[0]} {p3[1]} "
 
-        d += "Z"  # 闭合路径
+        d += "Z"
         path = dwg.path(d=d, fill=hex_color, stroke='none', fill_opacity=1.0)
 
 
@@ -78,7 +78,6 @@ gaussian_model = GaussianImage_Cholesky(
 checkpoint = torch.load(model_path, map_location=device)
 model_dict = gaussian_model.state_dict()
 # pretrained_dict = {k: v for k, v in checkpoint.items() if k in model_dict}
-# 过滤掉 key 不存在 或 shape 不匹配的参数
 pretrained_dict = {
     k: v for k, v in checkpoint.items()
     if k in model_dict and v.shape == model_dict[k].shape
@@ -86,7 +85,7 @@ pretrained_dict = {
 model_dict.update(pretrained_dict)
 gaussian_model.load_state_dict(model_dict, strict=False)
 # gaussian_model.opacity_activation = torch.nn.Identity()
-keep_num = num_curves  # 改成你想保留的数量，比如 1、200、512
+keep_num = num_curves 
 print(f"[INFO] Truncating model to first {keep_num} curves.")
 
 gaussian_model._control_points = torch.nn.Parameter(gaussian_model._control_points[:keep_num])
@@ -121,10 +120,8 @@ ratio = gaussian_model.W / gaussian_model.H
 widths = (boxes[:, 2] - boxes[:, 0]) * ratio
 heights = (boxes[:, 3] - boxes[:, 1])
 depth = widths * heights
-# depth: (512,)
-sorted_indices = torch.argsort(depth, descending=True)  # 从大到小排序
+sorted_indices = torch.argsort(depth, descending=True) 
 
-# 对 control_points 和 features_dc 同步排序
 control_points = control_points[sorted_indices.cpu()]   # shape: (512, 8, 2)
 features_dc = features_dc[sorted_indices.cpu()]
 svg_output_path = os.path.join(ret_dir, "output.svg")
