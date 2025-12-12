@@ -5,7 +5,7 @@
 This is the official implementation of our paper Bézier Splatting, an efficient and differentiable vector-graphics representation designed for high-quality image reconstruction and editing. Our method models images using a compact set of Bézier curves, combined with a novel Gaussian-based rasterization that enables fast, stable, and fully differentiable rendering. Thanks to this lightweight vector representation and our adaptive curve optimization strategy, Bézier Splatting achieves high visual fidelity with significantly reduced computation time and memory usage compared to existing differentiable vector graphics methods. Moreover, the explicit curve-based representation makes the output SVGs clean, structured, and truly editable, enabling downstream applications such as scalable dataset generation and fine-grained image manipulation. More qualitative results and details can be found in our paper. 
 
 <div align="center">
-  <img src="./img/teaser.png" alt="kodak_fitting" width="320" />
+  <img src="./img/teaser.png" />
 </div>
 
 ## News
