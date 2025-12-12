@@ -7,12 +7,12 @@ export PATH=$HOME/miniconda3/bin:$PATH
 source activate bs
 
 # please use your dataset path
-root=/scratch/xi9/Large-DATASET
+root='Your data path'
 dataset=DIV2K
 dataset_path="${root}/${dataset}"
 
 if [ ! -d "${dataset_path}" ]; then
-    echo "目录不存在: ${dataset_path}"
+    echo "dir does not exsit: ${dataset_path}"
     exit 1
 fi
 

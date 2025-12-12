@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # please use your dataset path
-root=/scratch/xi9/Large-DATASET
+root=/scratch/xi/Large-DATASET
 dataset=DIV2K_HR
 dataset_path="${root}/${dataset}"
 
 if [ ! -d "${dataset_path}" ]; then
-    echo "目录不存在: ${dataset_path}"
+    echo "dir does not exist: ${dataset_path}"
     exit 1
 fi
 

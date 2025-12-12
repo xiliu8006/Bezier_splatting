@@ -392,7 +392,31 @@ class GaussianImage_Cholesky(nn.Module):
         sigma_y = torch.cat([sigma_first, sigma_], dim=1) / (3.0 / torch.sqrt(torch.tensor(factor, dtype=torch.float32))) # 归一化
 
         sigma_y[:, :2, :].clamp_(max=1.0, min=0.75)
+
+        threshold = 0.1
+        ratio = 3.0
+
+        sx = sigma_x.clone()
+        sy = sigma_y.clone()
+        # mask where either value is extremely small
+        mask = (sy < threshold)
+        # only apply ratio clamp on positions starting from index 2
+        mx = mask[:, 2:, :]
+        my = mask[:, 2:, :]
+        # sigma_x clamp only where mask = True
+        sigma_x[:, 2:, :] = torch.where(
+            mx, 
+            torch.min(sx[:, 2:, :], sy[:, 2:, :] * ratio),
+            sx[:, 2:, :]
+        )
+        # sigma_y clamp only where mask = True
+        sigma_y[:, 2:, :] = torch.where(
+            my,
+            torch.min(sy[:, 2:, :], sx[:, 2:, :] * ratio),
+            sy[:, 2:, :]
+        )
         scaling = torch.cat([sigma_x.unsqueeze(-1), sigma_y.unsqueeze(-1)], dim=-1).contiguous()
+        # print("scaling max and min: ", scaling.max(), scaling.min())
         return scaling.view(-1, 2).detach()
     
     def get_scaling_open(self):
@@ -1224,9 +1248,10 @@ class GaussianImage_Cholesky(nn.Module):
         bezier1 = bezier1.unsqueeze(1)
         bezier2 = bezier2.unsqueeze(1) 
         x = torch.linspace(-2, 2, resolution, device=control_points.device)  
-        cdf_values = dist.Normal(0, 0.85).cdf(x)
+        # cdf_values = dist.Normal(0, 0.85).cdf(x)
         t_vals = torch.linspace(-2, 2, resolution, device=control_points.device)
         t_vals = dist.Normal(0, 0.85).cdf(t_vals).view(1, resolution, 1, 1)  # (1, R, 1, 1)
+        # t_vals = dist.Normal(0, 1.0).cdf(t_vals).view(1, resolution, 1, 1)  # (1, R, 1, 1)
         interp_cp = (1 - t_vals) * bezier1 + t_vals * bezier2  # (N, R, M+2, 2)
         interp_cp_flat = interp_cp.view(-1, M + 2, 2)  # (N * R, M+2, 2)
 
@@ -1746,7 +1771,6 @@ class GaussianImage_Cholesky(nn.Module):
         # # print("boundary: ", self.xyz.shape)
         loss += curvature_loss(self.xyz, self.num_samples)
         loss += boundary_loss_on_joints(self._control_points, self.bezier_degree + 1)
-        # print("check loss:  ", self._control_points[:, [0, 5], : ].max(), self._control_points[:, [0, 5], : ].min())
         loss.backward()
         # time_cuda(
         #     lambda: loss.backward(),

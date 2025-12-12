@@ -152,8 +152,6 @@ class SimpleTrainer2d:
         "psnr": psnr_value, "ms-ssim": ms_ssim_value, "rendering_time": test_end_time, "rendering_fps": 1/test_end_time})
         return psnr_value, ms_ssim_value, end_time, test_end_time, 1/test_end_time
 
-
-
     def train(self):     
         psnr_list, iter_list = [], []
         progress_bar = tqdm(range(1, self.iterations+1), desc="Training progress")
@@ -173,7 +171,7 @@ class SimpleTrainer2d:
                 if iter % 10 == 0:
                     progress_bar.set_postfix({f"Loss":f"{loss.item():.{7}f}", "PSNR":f"{psnr:.{4}f},"})
                     progress_bar.update(10)
-                if iter % remove_iter == 0 and iter <= 11200 and iter >=1000:
+                if iter % remove_iter == 0 and iter <= 9200 and iter >=1000:
                     if (iter // remove_iter) % 2 == 1:  # Odd multiples -> Remove
                         prune_mask = self.gaussian_model.remove_curves_mask()
                         self.gaussian_model.num_curves = prune_mask.sum()
@@ -189,58 +187,36 @@ class SimpleTrainer2d:
                 self.gaussian_model.optimizer.zero_grad(set_to_none = True)
                 # if iter % 1000 == 0:
                 if iter == self.iterations:
-                    for factor in [2,4,8,16]:
-                        renderpkg=self.gaussian_model()
-                        renderpkg_SR=self.gaussian_model(factor=factor)
-                        renderpkg_SR=self.gaussian_model(factor=factor, denser_sample=True)
-                        renderpkg_SR_ori=self.gaussian_model(factor=factor)
-
-                        image = renderpkg['render']
-                        image = image.squeeze(0)
-
-                        image_SR = renderpkg_SR['render']
-                        img_SR = image_SR.squeeze(0)
-
-                        image_SR_ori = renderpkg_SR_ori['render']
-                        img_SR_ori = image_SR_ori.squeeze(0)
-
-
-                        render_pkg_line = self.gaussian_model.forward_area_boundary()
-                        image_line = render_pkg_line['render']
-                        image_line = image_line.squeeze(0)
-
-                        # print("image shape: ", image.shape)
-                        to_pil = transforms.ToPILImage()
-                        img = to_pil(image)
-                        img_SR = to_pil(img_SR)
-                        img_SR_ori = to_pil(img_SR_ori)
-
-                        output_dir = os.path.dirname(f'{self.save_path}/svg_{frame_counter}.png')
-                        if not os.path.exists(output_dir):
-                            os.makedirs(output_dir)
-                        img.save(f'{self.save_path}/svg_{frame_counter}.png')
-                        img_SR.save(f'{self.save_path}/svg_{frame_counter}_SR.png')
-
-                        to_pil = transforms.ToPILImage()
-                        img_line = to_pil(image_line)
-                        img_line.save(f'{self.save_path}/svg_{frame_counter}_line.png')
-
-                        if iter == self.iterations:
-                            img.save(f'{self.save_path}/final.png')
-                            img_SR.save(f'{self.save_path}/final_SR_{factor}.png')
-                            img_SR_ori.save(f'{self.save_path}/final_SR_ori_{factor}.png')
-                        frame_counter += 1
+                    # for factor in [2,4,8,16]:
+                    renderpkg=self.gaussian_model()
+                    # Render higher resolution
+                    # renderpkg_SR=self.gaussian_model(factor=factor, denser_sample=True)
+                    image = renderpkg['render']
+                    image = image.squeeze(0)
+                    to_pil = transforms.ToPILImage()
+                    img = to_pil(image)
+                    if not os.path.exists(self.save_path):
+                        os.makedirs(self.save_path)
+                    if iter == self.iterations:
+                        img.save(f'{self.save_path}/final.png')
+                    
+                    render_pkg_line = self.gaussian_model.forward_area_boundary()
+                    image_line = render_pkg_line['render']
+                    image_line = image_line.squeeze(0)
+                    img_line = to_pil(image_line)
+                    img_line.save(f'{self.save_path}/svg_line.png')
+                    frame_counter += 1
                 
 
-        from subprocess import call
-        call(["ffmpeg", "-framerate", "24", "-i",
-            f'{self.save_path}/svg_%d.png', "-vb", "20M",
-            f"{self.save_path}/out.mp4"])
-        images_path = f'{self.save_path}/svg_*.png'
+        # from subprocess import call
+        # call(["ffmpeg", "-framerate", "24", "-i",
+        #     f'{self.save_path}/svg_%d.png', "-vb", "20M",
+        #     f"{self.save_path}/out.mp4"])
         # images_path = f'{self.save_path}/svg_*.png'
-        for image in glob.glob(images_path):
-            # print("remove image is: ", image)
-            os.remove(image)
+        # images_path = f'{self.save_path}/svg_*.png'
+        # for image in glob.glob(images_path):
+        #     # print("remove image is: ", image)
+        #     os.remove(image)
 
         end_time = time.time() - start_time
         progress_bar.close()
@@ -376,6 +352,7 @@ def main(argv):
         trainer = SimpleTrainer2d(image_path=image_path, imagesvg_path=imagesvg_path,num_points=args.num_points, 
             iterations=args.iterations, model_name=args.model_name, args=args, model_path=args.model_path)
         psnr, ms_ssim, training_time, eval_time, eval_fps = trainer.train()
+        
         # psnr, ms_ssim, training_time, eval_time, eval_fps = trainer.layerwised_train()
         psnrs.append(psnr)
         ms_ssims.append(ms_ssim)

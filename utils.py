@@ -224,16 +224,6 @@ def xing_loss(x_tensor, scale=1e-3):
     return loss
 
 def curvature_loss(paths: torch.Tensor, H: int, angle_thresh_deg=60.0) -> torch.Tensor:
-    """
-    计算由 paths[:, 0] 和 flip(paths[:, 1]) 拼接后的路径，在每隔 H 处连接点的曲率损失。
-
-    参数:
-        paths: Tensor [N, 2, M, 2]，两条拼接 Bézier 曲线段采样点
-        H: 每段 Bézier 采样点数（用于确定连接点位置）
-
-    返回:
-        标量 curvature loss
-    """
     assert paths.dim() == 4 and paths.shape[1] == 2, "Expect input shape [N, 2, M, 2]"
     N, _, M, _ = paths.shape
     path1 = paths[:, 0, :, :]              # [N, M, 2]
@@ -241,7 +231,6 @@ def curvature_loss(paths: torch.Tensor, H: int, angle_thresh_deg=60.0) -> torch.
     full_path = torch.cat([path1, path2], dim=1)     # [N, 2M, 2]
     total_len = full_path.shape[1]
 
-    # 拼接点索引
     indices = torch.arange(0, total_len, H, device=paths.device)  # [0, H, 2H, ...]
     # roll 相邻点
     prev = torch.roll(full_path, 5, dims=1)[:, indices, :]  # [N, K, 2]
