@@ -3,9 +3,7 @@
 
 This is the official implementation of our paper **Bézier Splatting**, an efficient and differentiable vector-graphics representation designed for high-quality image reconstruction and editing. Our method models images using a compact set of Bézier curves, combined with a novel Gaussian-based rasterization that enables fast, stable, and fully differentiable rendering. Thanks to this lightweight vector representation and our adaptive curve optimization strategy, Bézier Splatting achieves high visual fidelity with significantly reduced computation time and memory usage compared to existing differentiable vector graphics methods. Moreover, the explicit curve-based representation makes the output SVGs clean, structured, and truly editable, enabling downstream applications such as scalable dataset generation and fine-grained image manipulation. More qualitative results and details can be found in our paper.
 
-<div align="center">
-  <img src="./img/teaser.png" alt="kodak_fitting" width="320" />
-</div>
+![teaser](./img/teaser.png)
 
 ## News
 * **2025/9/18**: 🌟 Our paper has been accepted by NeurIPS 2025!
@@ -44,8 +42,8 @@ Our dataset download from [kodak](https://r0k.us/graphics/kodak/) and [DIV2K](ht
 │     ├── kodim02.png 
 │     ├── ...
 │   | DIV2K_HR
-│     ├── 0801x2.png
-│     ├── 0802x2.png
+│     ├── 00001.png
+│     ├── 00002.png
 │     ├── ...
 ```
 ## TO DO
@@ -70,6 +68,13 @@ To evaluate performance, run:
 bash get_result.sh
 python full_eval.py
 ```
+
+#### Convert Bezier splatting to standard XML
+If you want to get the XML file from our codebase, please save the gaussian model and run the following codes
+```
+python svg_converter.py
+```
+
 ## Acknowledgments
 
 We thank [GaussianImage](https://github.com/Xinjie-Q/GaussianImage) for providing the 2D Gaussian rasterization; our code builds upon this excellent foundation.
