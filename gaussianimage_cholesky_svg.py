@@ -25,8 +25,6 @@ def custom_lr_schedule(step):
         return 0.5                # 再升
     elif step < 9000:
         return 0.2                # 再升
-    # elif step < 11500:
-    #     return 0.2                # 再升
     else:
         return 0.1              # 最后降
 
@@ -104,7 +102,7 @@ class GaussianImage_Cholesky(nn.Module):
         self.iter = 0
         self.device = kwargs["device"]
         self.mode = kwargs['mode']
-        self.num_curves_init = 4096
+        self.num_curves_init = 128
         # self.num_curves = int(self.num_curves_init / 8)
         # self.num_curves = self.num_curves_init
         self.num_curves = kwargs["num_curves"]
@@ -112,12 +110,13 @@ class GaussianImage_Cholesky(nn.Module):
             self.num_beziers = 2 * 1
         else:
             self.num_beziers = 3
-        self.opacity_mode = 0 # 0 is single opacity, 1 is multi opacity
-        self.bezier_degree = 4
+        self.opacity_mode = 1 # 0 is single opacity, 1 is multi opacity, 1 only works for line-mode
+        # self.bezier_degree = 4
+        self.bezier_degree = kwargs["bezier_degree"]
     
         self.curves_resolution = 40
         self.max_sh_degree = 1
-        self.radius = 0.02
+        self.radius = 0.01
         if self.mode == "line":
             # self.num_samples = int(self.total_pixel / (self.num_curves * 20 * self.num_beziers))
             self.total_num_sample= self.num_samples
@@ -132,7 +131,6 @@ class GaussianImage_Cholesky(nn.Module):
             self.total_num_sample = self.num_samples * self.num_beziers
         else:
             self.num_samples = 32
-            # self.total_num_sample= self.num_samples * self.num_beziers
             self.total_num_sample= self.num_samples * self.num_beziers + self.curves_resolution**2
         
         self.rotation_activation = torch.sigmoid
@@ -142,7 +140,8 @@ class GaussianImage_Cholesky(nn.Module):
         elif self.mode == "closed":
             self._control_points = self._initialize_control_points()
         elif self.mode == "unclosed":
-            self._control_points = self._initialize_control_points_line(8)
+            # self._control_points = self._initialize_control_points_line(8)
+             self._control_points = self._initialize_control_points_line((self.bezier_degree * 3) - 1)
         else:
             self._control_points = self._initialize_control_points()
         self._features_dc = nn.Parameter(torch.rand(self.num_curves, 3))
@@ -172,29 +171,39 @@ class GaussianImage_Cholesky(nn.Module):
             self.cholesky_quantizer = UniformQuantizer(signed=False, bits=6, learned=True, num_channels=3)
 
 
+        # -------- lr scales --------
+        if self.mode == "unclosed":
+            lr_cp, lr_feat, lr_opacity = 0.1, 0.5, 10.0
+        else:
+            lr_cp, lr_feat, lr_opacity = 0.02, 1.0, 1.0
+
+        # -------- optimizer params --------
         l = [
-            {'params': [self._control_points], 'lr': kwargs["lr"] * 0.02, "name": "control_points"},
-            # {'params': [self._xyz], 'lr': kwargs["lr"] * 0, "name": "xyz"},
-            {'params': [self._features_dc], 'lr': kwargs["lr"], "name": "features_dc"},
+            {'params': [self._control_points], 'lr': kwargs["lr"] * lr_cp, "name": "control_points"},
+            {'params': [self._features_dc], 'lr': kwargs["lr"] * lr_feat, "name": "features_dc"},
             {'params': [self._cholesky], 'lr': kwargs["lr"], "name": "cholesky"},
             {'params': [self._scaling], 'lr': kwargs["lr"], "name": "scaling"},
-            # {'params': [self._rotation], 'lr': kwargs["lr"], "name": "rotation"},
-            {'params': [self._opacity], 'lr': kwargs["lr"], "name": "opacity"},
-            {'params': [self._depth], 'lr': kwargs["lr"], "name": "depth"}
+            {'params': [self._opacity], 'lr': kwargs["lr"] * lr_opacity, "name": "opacity"},
+            {'params': [self._depth], 'lr': kwargs["lr"], "name": "depth"},
         ]
 
-        if kwargs["opt_type"] == "adam":
-            self.optimizer = torch.optim.Adam(l, lr=kwargs["lr"])
-        else:
-            self.optimizer = Adan(l, lr=kwargs["lr"])
+        # -------- optimizer --------
+        self.optimizer = (
+            torch.optim.Adam(l, lr=kwargs["lr"])
+            if kwargs["opt_type"] == "adam"
+            else Adan(l, lr=kwargs["lr"])
+        )
 
-        # self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer, step_size=3000, gamma=0.5)
-        self.scheduler = LambdaLR(self.optimizer, lr_lambda=custom_lr_schedule)
-        self._update_bernstein_cache(self.bezier_degree + 1, self.num_samples, self.device)
-        self._update_bernstein_cache(self.bezier_degree + 1, self.num_samples * 2, self.device)
-        self._update_bernstein_cache(self.bezier_degree + 1, self.num_samples * 4, self.device)
-        self._update_bernstein_cache(self.bezier_degree + 1, self.num_samples * 8, self.device)
-        self._update_bernstein_cache(self.bezier_degree + 1, self.num_samples * 16, self.device)
+        if self.mode == "unclosed":
+            self.scheduler = torch.optim.lr_scheduler.StepLR(
+                    self.optimizer, step_size=7500, gamma=0.5
+                )
+        else:
+            self.scheduler = LambdaLR(self.optimizer, lr_lambda=custom_lr_schedule)
+
+        for deg in (self.bezier_degree + 1, self.bezier_degree):
+            for mul in (1, 2, 4, 8, 16):
+                self._update_bernstein_cache(deg, self.num_samples * mul, self.device)
 
         self.init_area_weight(self.device)
 
@@ -301,7 +310,8 @@ class GaussianImage_Cholesky(nn.Module):
         # print(centers[:,:, 0].)
         num_segments = self.num_beziers  # Each curve has 3 Bézier segments
         if self.mode == 'unclosed':
-            num_points_per_curve = num_segments * 3 + 1  
+            # num_points_per_curve = num_segments * 3 + 1
+            num_points_per_curve = num_segments * self.bezier_degree + 1  
             num_offsets = num_points_per_curve - 1      
             p0 = x_centers  # (N, 1, 2)
             num_left = num_offsets // 2
@@ -312,7 +322,7 @@ class GaussianImage_Cholesky(nn.Module):
             relative_right = torch.cumsum(offsets_right, dim=1)
             points_left = p0 + relative_left.flip(dims=[1])  # (N, num_left, 2)
             points_right = p0 + relative_right               # (N, num_right, 2)
-            print("shape: ", points_left.shape, p0.shape, points_right.shape)
+            # print("shape: ", points_left.shape, p0.shape, points_right.shape)
             control_points = torch.cat([points_left, p0, points_right], dim=1)  # (N, num_points, 2)
             return torch.nn.Parameter(control_points)
         else:
@@ -630,16 +640,21 @@ class GaussianImage_Cholesky(nn.Module):
                 opacities =  self._opacity.unsqueeze(1).repeat(1, self.xyz.shape[1] + self.xyz_area.shape[1], self.xyz.shape[2])
                 return  self.opacity_activation(opacities.contiguous().view(-1, 1))
         else:
-            N, cols = self._opacity.shape
-            base_rep = self.total_num_sample // 3
-            remainder = self.num_samples % 3
-            parts = []
-            for i in range(3):
-                rep = base_rep + (remainder if i == 3 else 0)
-                part = self._opacity[:, i].unsqueeze(1).repeat(1, rep)
-                parts.append(part)
-                out = torch.cat(parts, dim=1)
-            return self.opacity_activation(out.contiguous().view(-1, 1))
+            if self.opacity_mode == 1:
+                N, cols = self._opacity.shape
+                base_rep = self.total_num_sample // 3
+                remainder = self.num_samples % 3
+                parts = []
+                for i in range(3):
+                    rep = base_rep + (remainder if i == 3 else 0)
+                    part = self._opacity[:, i].unsqueeze(1).repeat(1, rep)
+                    parts.append(part)
+                    out = torch.cat(parts, dim=1)
+                return self.opacity_activation(out.contiguous().view(-1, 1))
+            else:
+                # print("opacity shape: ", self._opacity.shape)
+                opacities =  self._opacity.repeat(1, self.total_num_sample)
+                return  self.opacity_activation(opacities.contiguous().view(-1, 1))
 
 
     @property
@@ -673,6 +688,8 @@ class GaussianImage_Cholesky(nn.Module):
 
         # self._update_bernstein_cache(n, num_samples, device)
         key = (n, num_samples, str(device))
+        # import pdb; pdb.set_trace()
+        # print("key is: ", key, self._bernstein_cache.keys())
         cache = self._bernstein_cache[key]
 
         bernstein = cache['bernstein'][None, :, :]  # (1, num_samples, n+1)
@@ -792,7 +809,84 @@ class GaussianImage_Cholesky(nn.Module):
         else:
             raise ValueError(f"Unsupported mode: {self.mode}")
 
-    def remove_curves_mask_line(self, top_k=0.01, iou_threshold=0.1, color_threshold=0.05, remove_num=None, imagesize=None):
+    # def remove_curves_mask_line(self, top_k=0.01, iou_threshold=0.1, color_threshold=0.05, remove_num=None, imagesize=None):
+    #     color_threshold_input = color_threshold
+    #     if self.iter < 7000:
+    #         area_threshold = 5000
+    #         color_threshold = color_threshold_input
+    #     else:
+    #         # color_threshold = color_threshold_input / 2
+    #         area_threshold = 500
+    #     xyz = self.xyz.view(-1,self.total_num_sample,2)
+    #     num_curves = self._control_points.shape[0]
+    #     xys = self.xys.view(num_curves, -1, 2).detach()
+    #     boxes = self.compute_aabb(xys)
+        
+    #     widths = boxes[:, 2] - boxes[:, 0]
+    #     heights = boxes[:, 3] - boxes[:, 1]
+        
+    #     areas = widths * heights
+    #     outside_area = self.compute_outside_area(boxes)
+    #     ratio = outside_area / areas
+    #     mask_outside = ratio > 0.6
+    #     inter_left = torch.max(boxes[:, None, 0], boxes[None, :, 0])  # max(x1_1, x1_2)
+    #     inter_top = torch.max(boxes[:, None, 1], boxes[None, :, 1])   # max(y1_1, y1_2)
+    #     inter_right = torch.min(boxes[:, None, 2], boxes[None, :, 2]) # min(x2_1, x2_2)
+    #     inter_bottom = torch.min(boxes[:, None, 3], boxes[None, :, 3])# min(y2_1, y2_2)
+
+    #     inter_width = (inter_right - inter_left).clamp(min=0)
+    #     inter_height = (inter_bottom - inter_top).clamp(min=0)
+    #     inter_area = inter_width * inter_height
+
+    #     ratio_matrix = inter_area / areas.unsqueeze(1)
+    #     ratio_matrix.fill_diagonal_(0)
+    #     color = self._features_dc.clone() * self.opacity_activation(self._opacity)
+    #     color_diff = torch.norm(color.unsqueeze(1) - color.unsqueeze(0), dim=-1)
+        
+    #     keep = torch.ones(boxes.size(0), dtype=torch.bool, device=boxes.device)
+    #     iou_mask = (ratio_matrix > iou_threshold)
+    #     color_mask = (color_diff < color_threshold)
+    #     suppress_matrix = iou_mask & color_mask
+    #     suppress_matrix.fill_diagonal_(0)
+    #     keep[mask_outside] = False
+
+    #     xys = self.xys.clone().detach().view(self._control_points.shape[0], -1, 2)
+    #     line_areas = torch.norm(xys[:, 1:, :] - xys[:, :-1, :], dim=-1).sum(-1)
+    #     line_areas = line_areas * torch.abs(self._scaling.detach()).squeeze(-1)
+    #     opacities = torch.sigmoid(self._opacity).squeeze(-1)
+    #     opacities_threshold = 0.6
+    #     if self.iter > 10000:
+    #         areas_mask = line_areas < area_threshold
+    #         opacities_mask = opacities.sum(-1) < opacities_threshold / 2
+    #         print("line areas max: ", line_areas.max(), line_areas.min(),areas_mask.shape, opacities_mask.shape)
+    #         keep[areas_mask & opacities_mask] = False
+    #     else:
+    #         opacities_mask = opacities < opacities_threshold
+    #         keep[opacities.sum(-1) < opacities_threshold] = False
+
+    #     for idx in range(len(areas)):
+    #         if not keep[idx]:
+    #             continue 
+    #         if suppress_matrix[idx][idx + 1:].sum() > 0:
+    #             slice_part = suppress_matrix[idx, idx+1:]
+    #             relative_idx = (slice_part > 0).nonzero(as_tuple=False)
+    #             original_idx = relative_idx + (idx + 1)
+    #             total_match_count = 0.0
+    #             for qualified_idx in original_idx:
+    #                 match_count, matched_distances = self.compute_pairwise_overlap(xys[idx], xys[qualified_idx])
+    #                 total_match_count += match_count
+    #             # print("see the avg: ", (total_match_count / float(self.num_samples)))
+    #             if self.iter > 10000:
+    #                 if (total_match_count / float(self.num_samples) > 0.6) and line_areas[idx] < area_threshold:
+    #                     keep[idx] = False
+    #             else:
+    #                 if (total_match_count / float(self.num_samples) > 0.6):
+    #                     keep[idx] = False
+    #         if (widths[idx]<4) & (heights[idx]<4) & (widths[idx] * heights[idx] < 12):
+    #             keep[idx] = False
+    #     return keep
+
+    def remove_curves_mask_line(self, top_k=0.01, iou_threshold=0.2, color_threshold=0.03, remove_num=None, imagesize=None):
         color_threshold_input = color_threshold
         if self.iter < 7000:
             area_threshold = 5000
@@ -868,6 +962,7 @@ class GaussianImage_Cholesky(nn.Module):
             if (widths[idx]<4) & (heights[idx]<4) & (widths[idx] * heights[idx] < 12):
                 keep[idx] = False
         return keep
+
 
     def remove_curves_mask_area(self, top_k=0.01, iou_threshold=0.1, color_threshold=0.05, remove_num=None, imagesize=None):
         color_threshold_input = color_threshold
@@ -1011,16 +1106,23 @@ class GaussianImage_Cholesky(nn.Module):
         - sampled_points: (num_curves, 4 * num_samples, 2)
         """
         num_curves, total_control_points, _ = control_points.shape
-        assert total_control_points == self.num_beziers * 3 + 1, (
-            f"Expected {self.num_beziers * 3 + 1} control points, got {total_control_points}"
+        # assert total_control_points == self.num_beziers * 3 + 1, (
+        #     f"Expected {self.num_beziers * 3 + 1} control points, got {total_control_points}"
+        # )
+        assert total_control_points == self.num_beziers * self.bezier_degree + 1, (
+            f"Expected {self.num_beziers * self.bezier_degree + 1} control points, got {total_control_points}"
         )
         device = control_points.device
         samples_per_segment = int(num_samples / self.num_beziers)
 
         # Vectorized generation of control point indices for each Bézier segment
-        base = torch.arange(self.num_beziers, device=device).unsqueeze(1) * 3  # (num_beziers, 1)
-        offsets = torch.arange(4, device=device).unsqueeze(0)  # (1, 4)
-        indices = (base + offsets) % total_control_points  # (num_beziers, 4)
+        # base = torch.arange(self.num_beziers, device=device).unsqueeze(1) * 3  # (num_beziers, 1)
+        # offsets = torch.arange(4, device=device).unsqueeze(0)  # (1, 4)
+        # indices = (base + offsets) % total_control_points  # (num_beziers, 4)
+
+        base = torch.arange(self.num_beziers, device=device).unsqueeze(1) * self.bezier_degree  # (num_beziers, 1)
+        offsets = torch.arange(self.bezier_degree + 1, device=device).unsqueeze(0) 
+        indices = (base + offsets) % total_control_points
 
         # Expand for all curves
         indices = indices.unsqueeze(0).expand(num_curves, -1, -1)  # (num_curves, num_beziers, 4)
@@ -1029,22 +1131,24 @@ class GaussianImage_Cholesky(nn.Module):
         control_points_exp = control_points.unsqueeze(1).expand(-1, self.num_beziers, -1, -1)  # (num_curves, num_beziers, total_cp, 2)
         indices_exp = indices.unsqueeze(-1).expand(-1, -1, -1, 2)  # (num_curves, num_beziers, 4, 2)
 
-        segment_control_points = time_cuda(
-            lambda: torch.gather(control_points_exp, 2, indices_exp),
-            "extract_segment_control_points"
-        )  # Shape: (num_curves, num_beziers, 4, 2)
+        segment_control_points = torch.gather(control_points_exp, 2, indices_exp)
+        # segment_control_points = time_cuda(
+        #     lambda: torch.gather(control_points_exp, 2, indices_exp),
+        #     "extract_segment_control_points"
+        # )  # Shape: (num_curves, num_beziers, 4, 2)
 
         # Merge all segments into a flat batch
-        merged_control_points = segment_control_points.reshape(-1, 4, 2)  # (num_curves * num_beziers, 4, 2)
-
+        # merged_control_points = segment_control_points.reshape(-1, 4, 2)  # (num_curves * num_beziers, 4, 2)
+        merged_control_points = segment_control_points.reshape(-1, self.bezier_degree + 1, 2)
+        sampled_points = self.sample_bezier_curves_uniform(merged_control_points,samples_per_segment)
         # Sample each Bézier segment
-        sampled_points= time_cuda(
-            lambda: self.sample_bezier_curves_uniform(
-                merged_control_points,
-                samples_per_segment,
-            ),
-            "sample_bezier_curves_uniform"
-        )  # (num_curves * num_beziers, samples_per_segment, 2)
+        # sampled_points= time_cuda(
+        #     lambda: self.sample_bezier_curves_uniform(
+        #         merged_control_points,
+        #         samples_per_segment,
+        #     ),
+        #     "sample_bezier_curves_uniform"
+        # )  # (num_curves * num_beziers, samples_per_segment, 2)
 
         # Reshape back to (num_curves, num_samples, 2)
         # print("sample points shape: ", sampled_points.shape, num_samples, samples_per_segment)
@@ -1551,6 +1655,11 @@ class GaussianImage_Cholesky(nn.Module):
         with torch.no_grad():
             rotation_input = self.compute_rotations(
                     self.xyz.view(self._control_points.shape[0], -1, 2)).view(-1, 1).detach()    
+
+        if self.mode == 'closed':
+            with torch.no_grad():
+                scaling = self.get_scaling(factor)
+        else:
             scaling = self.get_scaling(factor)
 
         opacity = self.get_opacity
@@ -1577,18 +1686,21 @@ class GaussianImage_Cholesky(nn.Module):
                 self._depth.copy_(depth.unsqueeze(-1).contiguous())
             depth = self.get_depth.view(-1, 1)
         else:
-            with torch.no_grad():
-                xys = self.xys.clone().detach().view(self._control_points.shape[0], -1, 2)
-                diffs = torch.norm(xys[:, 1:, :] - xys[:, :-1, :], dim=-1).sum(-1, keepdim=True) * torch.abs(self._scaling.detach())
-                self._depth.copy_(diffs)
-            depth = self.get_depth.view(-1, 1)
+            if self.iter < 10000 and self.iter % 20 == 0:
+                with torch.no_grad():
+                    xys = self.xys.clone().detach().view(self._control_points.shape[0], -1, 2)
+                    diffs = torch.norm(xys[:, 1:, :] - xys[:, :-1, :], dim=-1).sum(-1, keepdim=True) * torch.abs(self._scaling.detach())
+                    self._depth.copy_(diffs).contiguous()
+            # depth = self.get_depth.view(-1, 1)
+            depth = self.get_depth.detach()
+            # if self.iter < 6000 and self.iter % 20 == 0:
+            #     depth = torch.rand(self.num_curves, 1).to(self._control_points.device)
+            #     with torch.no_grad():
+            #         # print("self.depth", self._depth.shape, depth.shape)
+            #         self._depth = nn.Parameter(torch.rand(self._control_points.shape[0], 1).to(self._control_points.device))
+            #         # self._depth.copy_(depth)
+            #     depth = self.get_depth.contiguous()
 
-        # print("self.xyz: ", self.xys.shape, depth.shape, self.radii.shape, conics.shape, features_dc.shape, opacity.shape)
-        # out_img = rasterize_gaussians(self.xys, depth.detach(), self.radii, conics, num_tiles_hit,
-        #         features_dc.view(-1, 3), opacity.view(-1, 1), self.H, self.W, self.BLOCK_H, self.BLOCK_W, background=self.background, return_alpha=False)
-        
-        # final_h = self.H * factor
-        # final_w = self.W * factor
         if factor > 1:
             print("See the range: ", self.xys.max(), self.xys.min(), self.xyz.max(), self.xyz.min())
             
@@ -1772,10 +1884,20 @@ class GaussianImage_Cholesky(nn.Module):
         loss += curvature_loss(self.xyz, self.num_samples)
         loss += boundary_loss_on_joints(self._control_points, self.bezier_degree + 1)
         loss.backward()
-        # time_cuda(
-        #     lambda: loss.backward(),
-        #     "backward"
-        # )  # Shape: (num_curves, num_beziers, 4, 2)
+        with torch.no_grad():
+            mse_loss = F.mse_loss(image, gt_image)
+            psnr = 10 * math.log10(1.0 / mse_loss.item())
+        self.optimizer.step()
+        self.iter += 1
+        self.scheduler.step()
+        return loss, psnr, image
+    
+    def train_iter_opencurves(self, gt_image):
+        render_pkg = self.forward()
+        image = render_pkg["render"]
+        loss = loss_fn(image, gt_image, self.loss_type, lambda_value=0.7)
+        # loss += xing_loss(self._control_points, scale=1e-2)
+        loss.backward()
         with torch.no_grad():
             mse_loss = F.mse_loss(image, gt_image)
             psnr = 10 * math.log10(1.0 / mse_loss.item())

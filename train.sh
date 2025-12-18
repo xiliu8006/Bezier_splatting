@@ -7,7 +7,7 @@ export PATH=$HOME/miniconda3/bin:$PATH
 source activate bs
 
 # please use your dataset path
-root='Your data path'
+root='/scratch/xi9/Large-DATASET/'
 dataset=DIV2K
 dataset_path="${root}/${dataset}"
 
@@ -26,7 +26,11 @@ find "${dataset_path}" -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*
         continue
     fi
     img_name=$(basename "${img_path}")
-    # sbatch ./scripts/gaussianimage_cholesky/div2k_train.sh "${dataset}" "${img_name}" "${root}" "${counter}"
+    # This is for closed curves
     python train_withsvg.py --data_name ${dataset} --image_name ${img_name} -d ${root} \
-         --model_name GaussianImage_Cholesky_svg --num_curves 512 --iterations 10000
+         --model_name GaussianImage_Cholesky_svg --num_curves 512 --bezier_degree 4 --iterations 10000
+
+    #This is for open curves
+    # python train_withsvg.py --data_name ${dataset} --image_name ${img_name} -d ${root} \
+    #      --model_name GaussianImage_Cholesky_svg --num_curves 512 --mode unclosed --lr 0.005 --bezier_degree 3 --iterations 15000
 done

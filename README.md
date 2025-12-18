@@ -47,12 +47,11 @@ Our dataset download from [kodak](https://r0k.us/graphics/kodak/) and [DIV2K](ht
 │     ├── ...
 ```
 ## TO DO
-- Release configuration the open-curve image vectorization code.
 - Release configuration for layer-wise training (a runnable version exists, but further modifications are required).
 
 ## Train and Evaluation scripts
 
-To vectorize all images under one folder:
+To vectorize all images under one folder, we support open and close curves:
 
 ```bash
 bash train.sh

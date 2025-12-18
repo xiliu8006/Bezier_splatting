@@ -46,16 +46,16 @@ class SimpleTrainer2d:
         self.iterations = iterations
         self.save_imgs = args.save_imgs
         self.num_samples=args.num_samples
-        
-        
+        self.bezier_degree = args.bezier_degree
+
         name = os.path.splitext(args.image_name)[0]
-        self.save_path = f'./output/bezier_splatting_area_our_{args.num_curves}/{args.data_name}/{name}'
+        self.save_path = f'./output/bezier_splatting_{self.mode}_our_{args.num_curves}/{args.data_name}/{name}'
         self.log_dir = Path(f"./checkpoints/{args.data_name}/{model_name}_{args.iterations}_{num_points}/{self.image_name}")
         
         if model_name == "GaussianImage_Cholesky_svg":
             from gaussianimage_cholesky_svg import GaussianImage_Cholesky
             self.gaussian_model = GaussianImage_Cholesky(loss_type="L2", opt_type="adan", num_curves=self.num_curves, num_samples=args.num_samples, H=self.H, W=self.W, BLOCK_H=BLOCK_H, BLOCK_W=BLOCK_W, 
-                device=self.device, lr=args.lr, mode=self.mode, quantize=False).to(self.device)
+                device=self.device, lr=args.lr, mode=self.mode, bezier_degree=self.bezier_degree, quantize=False).to(self.device)
 
         self.logwriter = LogWriter(self.log_dir)
 
@@ -105,7 +105,7 @@ class SimpleTrainer2d:
                     add_path_num = allocations.pop()
                     print("adding path: ", add_path_num)
                     pos_init_method = sparse_coord_init(self.gt_image, pred_image)
-                    if iter < 9000:
+                    if iter < 9200:
                         radii = 0.02
                     else:
                         radii = 0.01
@@ -164,14 +164,19 @@ class SimpleTrainer2d:
         print("start training the save path is: ", self.save_path)
 
         for iter in range(1, self.iterations+1):
-            loss, psnr, pred_image = self.gaussian_model.train_iter(self.gt_image)
+            if self.mode == 'unclosed':
+                loss, psnr, pred_image = self.gaussian_model.train_iter_opencurves(self.gt_image)
+            else:
+                loss, psnr, pred_image = self.gaussian_model.train_iter(self.gt_image)
             psnr_list.append(psnr)
             iter_list.append(iter)
             with torch.no_grad():
                 if iter % 10 == 0:
                     progress_bar.set_postfix({f"Loss":f"{loss.item():.{7}f}", "PSNR":f"{psnr:.{4}f},"})
                     progress_bar.update(10)
-                if iter % remove_iter == 0 and iter <= 9200 and iter >=1000:
+                
+                max_iter = 14000 if self.mode == "unclosed" else 9200
+                if iter % remove_iter == 0 and 1000 <= iter < max_iter:
                     if (iter // remove_iter) % 2 == 1:  # Odd multiples -> Remove
                         prune_mask = self.gaussian_model.remove_curves_mask()
                         self.gaussian_model.num_curves = prune_mask.sum()
@@ -184,6 +189,7 @@ class SimpleTrainer2d:
                         self.gaussian_model.densify(remove_num, pos_init_method, self.gt_image)
                         print("after densify", self.gaussian_model._control_points.shape, remove_num)
                         remove_num = 0
+
                 self.gaussian_model.optimizer.zero_grad(set_to_none = True)
                 # if iter % 1000 == 0:
                 if iter == self.iterations:
@@ -200,12 +206,12 @@ class SimpleTrainer2d:
                     if iter == self.iterations:
                         img.save(f'{self.save_path}/final.png')
                     
-                    render_pkg_line = self.gaussian_model.forward_area_boundary()
-                    image_line = render_pkg_line['render']
-                    image_line = image_line.squeeze(0)
-                    img_line = to_pil(image_line)
-                    img_line.save(f'{self.save_path}/svg_line.png')
-                    frame_counter += 1
+                    # render_pkg_line = self.gaussian_model.forward_area_boundary()
+                    # image_line = render_pkg_line['render']
+                    # image_line = image_line.squeeze(0)
+                    # img_line = to_pil(image_line)
+                    # img_line.save(f'{self.save_path}/svg_line.png')
+                    # frame_counter += 1
                 
 
         # from subprocess import call
@@ -269,7 +275,9 @@ def parse_args(argv):
     parser.add_argument(
         "--num_curves", type=int, default=512, help="number of beizer curves"
     )
-
+    parser.add_argument(
+        "--bezier_degree", type=int, default=4, help="number of beizer curves"
+    )
     parser.add_argument(
         "--num_samples", type=int, default=64, help="number of beizer curves"
     )
